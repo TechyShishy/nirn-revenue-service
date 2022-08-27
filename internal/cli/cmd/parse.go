@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/windows"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/parser"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/parser"
 )
 
 var parseFilePath *string

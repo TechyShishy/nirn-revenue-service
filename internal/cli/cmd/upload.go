@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/gamedata"
-	"github.com/TechyShishy/nirn-revenue-service/internal/gamedata/region"
-	"github.com/TechyShishy/nirn-revenue-service/internal/parser"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/parser"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
 	"github.com/spf13/cobra"
 	"golang.org/x/sys/windows"
 )
@@ -36,7 +36,7 @@ to quickly create a Cobra application.`,
 			log.Print(err)
 			return
 		}
-		regionsData := make(map[region.Region][]gamedata.ItemVariant)
+		regionsData := make(map[region.Region][]data.ItemVariant)
 		for _, file := range files {
 			globalVar := strings.TrimSuffix(
 				filepath.Base(file),
@@ -56,9 +56,9 @@ to quickly create a Cobra application.`,
 }
 
 func mergeRegions(
-	r ...map[region.Region][]gamedata.ItemVariant,
-) map[region.Region][]gamedata.ItemVariant {
-	allFiles := make(map[region.Region][]gamedata.ItemVariant)
+	r ...map[region.Region][]data.ItemVariant,
+) map[region.Region][]data.ItemVariant {
+	allFiles := make(map[region.Region][]data.ItemVariant)
 	for _, r2 := range r {
 		for k, v := range r2 {
 			allFiles[k] = append(allFiles[k], v...)

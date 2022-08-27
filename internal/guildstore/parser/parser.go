@@ -3,15 +3,45 @@ package parser
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"time"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/gamedata"
-	"github.com/TechyShishy/nirn-revenue-service/internal/gamedata/region"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data"
+	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
 	lua "github.com/yuin/gopher-lua"
+	"golang.org/x/sys/windows"
 )
 
-func Parse(luaFile string, globalVar string) (map[region.Region][]gamedata.ItemVariant, error) {
-	regionsData := make(map[region.Region][]gamedata.ItemVariant)
+const (
+	defaultSavedVariablesPathBase string = "Elder Scrolls Online/live/SavedVariables"
+	defaultGuildStoreDataFileGlob string = "GS[01][0-9]Data.lua"
+)
+
+var defaultSavedVariablesPath string
+
+type Parser struct {
+	SavedVariablesPath     string
+	GuildStoreDataFileGlob string
+	GSDataFiles            []guildstore.GSDataFile
+}
+
+func New() Parser {
+	return Parser{
+		SavedVariablesPath:     defaultSavedVariablesPath,
+		GuildStoreDataFileGlob: defaultGuildStoreDataFileGlob,
+	}
+}
+
+func (p *Parser) ParseAll() {
+	regionsData := make(map[region.Region][]data.ItemVariant)
+	L := lua.NewState(lua.Options{SkipOpenLibs: true})
+	defer L.Close()
+	_ = regionsData
+}
+
+func Parse(luaFile string, globalVar string) (map[region.Region][]data.ItemVariant, error) {
+	regionsData := make(map[region.Region][]data.ItemVariant)
 	L := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer L.Close()
 	if err := L.DoFile(luaFile); err != nil {
@@ -45,8 +75,8 @@ func Parse(luaFile string, globalVar string) (map[region.Region][]gamedata.ItemV
 	return regionsData, nil
 }
 
-func parseRegion(dataTable *lua.LTable) []gamedata.ItemVariant {
-	regionData := []gamedata.ItemVariant{}
+func parseRegion(dataTable *lua.LTable) []data.ItemVariant {
+	regionData := []data.ItemVariant{}
 	dataTable.ForEach(func(id, variant lua.LValue) {
 		idInt, err := luaInt(id)
 		if err != nil {
@@ -70,7 +100,7 @@ func parseRegion(dataTable *lua.LTable) []gamedata.ItemVariant {
 				return
 			}
 
-			i := gamedata.ItemVariant{Id: idInt, Variant: vIdString}
+			i := data.ItemVariant{Id: idInt, Variant: vIdString}
 			listingTable.ForEach(func(key, value lua.LValue) {
 				keyString, err := luaString(key)
 				if err != nil {
@@ -146,15 +176,15 @@ func parseRegion(dataTable *lua.LTable) []gamedata.ItemVariant {
 	return regionData
 }
 
-func parseSales(t *lua.LTable) ([]gamedata.Sale, error) {
-	sales := []gamedata.Sale{}
+func parseSales(t *lua.LTable) ([]data.Sale, error) {
+	sales := []data.Sale{}
 	t.ForEach(func(i, sale lua.LValue) {
 		saleTable, err := luaTable(sale)
 		if err != nil {
 			log.Print(err)
 			return
 		}
-		s := gamedata.Sale{}
+		s := data.Sale{}
 		saleTable.ForEach(func(key, value lua.LValue) {
 			keyString, err := luaString(key)
 			if err != nil {
@@ -175,7 +205,7 @@ func parseSales(t *lua.LTable) ([]gamedata.Sale, error) {
 					log.Print(err)
 					return
 				}
-				s.Buyer = valueInt
+				s.BuyerId = valueInt
 			case "price":
 				valueInt, err := luaInt(value)
 				if err != nil {
@@ -189,14 +219,14 @@ func parseSales(t *lua.LTable) ([]gamedata.Sale, error) {
 					log.Print(err)
 					return
 				}
-				s.ItemLink = valueInt
+				s.ItemLinkId = valueInt
 			case "seller":
 				valueInt, err := luaInt(value)
 				if err != nil {
 					log.Print(err)
 					return
 				}
-				s.Seller = valueInt
+				s.SellerId = valueInt
 			case "timestamp":
 				valueInt, err := luaInt(value)
 				if err != nil {
@@ -217,7 +247,7 @@ func parseSales(t *lua.LTable) ([]gamedata.Sale, error) {
 					log.Print(err)
 					return
 				}
-				s.Guild = valueInt
+				s.GuildId = valueInt
 			case "id":
 				valueString, err := luaString(value)
 				if err != nil {
@@ -267,4 +297,13 @@ func luaTable(l lua.LValue) (*lua.LTable, error) {
 		return &lua.LTable{}, fmt.Errorf("wanted lua.LTable, got %v from lua: %#v", l.Type(), l)
 	}
 	return lTable, nil
+}
+
+func init() {
+	documentsPath, err := windows.KnownFolderPath(windows.FOLDERID_Documents, 0)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defaultSavedVariablesPath = filepath.Join(documentsPath, defaultGuildStoreDataFileGlob)
 }
