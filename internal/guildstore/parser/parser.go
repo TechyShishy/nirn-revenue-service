@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore"
@@ -15,64 +16,123 @@ import (
 
 const (
 	defaultSavedVariablesPathBase string = "Elder Scrolls Online/live/SavedVariables"
-	defaultGuildStoreDataFileGlob string = "GS[01][0-9]Data.lua"
+	defaultGSDataFileGlobBase     string = "GS[01][0-9]Data.lua"
 )
 
-var defaultSavedVariablesPath string
+var DefaultGSDataFileGlob string
 
 type Parser struct {
-	SavedVariablesPath     string
-	GuildStoreDataFileGlob string
-	GSDataFiles            []guildstore.GSDataFile
+	GSDataFileGlob string
+	GSDataFiles    []guildstore.GSDataFile
 }
 
 func New() Parser {
 	return Parser{
-		SavedVariablesPath:     defaultSavedVariablesPath,
-		GuildStoreDataFileGlob: defaultGuildStoreDataFileGlob,
+		GSDataFileGlob: DefaultGSDataFileGlob,
 	}
 }
 
-func (p *Parser) ParseAll() {
-	regionsData := make(map[region.Region][]data.ItemVariant)
-	L := lua.NewState(lua.Options{SkipOpenLibs: true})
-	defer L.Close()
-	_ = regionsData
+func (p *Parser) ParseGlob() (map[region.Region][]data.ItemVariant, error) {
+	gsDataFiles, err := p.globFiles(p.GSDataFileGlob)
+	if err != nil {
+		return nil, err
+	}
+	p.GSDataFiles = gsDataFiles
+	return p.ParseAll()
 }
 
-func Parse(luaFile string, globalVar string) (map[region.Region][]data.ItemVariant, error) {
-	regionsData := make(map[region.Region][]data.ItemVariant)
+func (p *Parser) ParseAll() (map[region.Region][]data.ItemVariant, error) {
 	L := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer L.Close()
-	if err := L.DoFile(luaFile); err != nil {
+
+	globalLValues, err := readFiles(L, p.GSDataFiles)
+	if err != nil {
 		return nil, err
 	}
 
-	SavedVariablesLValue, ok := (L.GetGlobal(globalVar)).(*lua.LTable)
-	if !ok {
-		return nil, fmt.Errorf("parsed file did not result in valid data")
+	regionsData, err := parseGlobals(globalLValues)
+	if err != nil {
+		return nil, err
 	}
-	SavedVariablesLValue.ForEach(func(key, value lua.LValue) {
-		keyString, err := luaString(key)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-		valueTable, err := luaTable(value)
-		if err != nil {
-			log.Print(err)
-			return
-		}
-
-		switch keyString {
-		case "dataeu":
-			regionsData[region.EU] = parseRegion(valueTable)
-		case "datana":
-			regionsData[region.NA] = parseRegion(valueTable)
-		}
-	})
 
 	return regionsData, nil
+}
+
+func readFiles(l *lua.LState, files []guildstore.GSDataFile) (r []lua.LTable, err error) {
+	for _, file := range files {
+		if err := l.DoFile(file.Path); err != nil {
+			return nil, err
+		}
+		lv, ok := (l.GetGlobal(file.GlobalVar)).(*lua.LTable)
+		if !ok {
+			return nil, fmt.Errorf("parsed file did not result in valid data")
+		}
+		r = append(r, *lv)
+	}
+
+	return r, nil
+}
+
+func (*Parser) globFiles(glob string) ([]guildstore.GSDataFile, error) {
+	paths, err := filepath.Glob(glob)
+	if err != nil {
+		return nil, err
+	}
+	var files []guildstore.GSDataFile
+	for _, path := range paths {
+		files = append(files, guildstore.GSDataFile{
+			Path:      path,
+			GlobalVar: GlobalVarFromPath(path),
+		})
+	}
+	return files, nil
+}
+
+func GlobalVarFromPath(path string) string {
+	return strings.TrimSuffix(
+		filepath.Base(path),
+		filepath.Ext(path),
+	) + "SavedVariables"
+}
+
+func parseGlobals(globals []lua.LTable) (map[region.Region][]data.ItemVariant, error) {
+	regionsData := make(map[region.Region][]data.ItemVariant)
+	for _, global := range globals {
+		r := make(map[region.Region][]data.ItemVariant)
+		global.ForEach(func(key, value lua.LValue) {
+			keyString, err := luaString(key)
+			if err != nil {
+				log.Print(err)
+				return
+			}
+			valueTable, err := luaTable(value)
+			if err != nil {
+				log.Print(err)
+				return
+			}
+
+			switch keyString {
+			case "dataeu":
+				r[region.EU] = parseRegion(valueTable)
+			case "datana":
+				r[region.NA] = parseRegion(valueTable)
+			}
+		})
+		regionsData = mergeRegions(regionsData, r)
+	}
+	return regionsData, nil
+}
+
+func mergeRegions(
+	r ...map[region.Region][]data.ItemVariant,
+) map[region.Region][]data.ItemVariant {
+	allFiles := make(map[region.Region][]data.ItemVariant)
+	for _, r2 := range r {
+		for k, v := range r2 {
+			allFiles[k] = append(allFiles[k], v...)
+		}
+	}
+	return allFiles
 }
 
 func parseRegion(dataTable *lua.LTable) []data.ItemVariant {
@@ -305,5 +365,9 @@ func init() {
 		log.Print(err)
 		return
 	}
-	defaultSavedVariablesPath = filepath.Join(documentsPath, defaultGuildStoreDataFileGlob)
+	DefaultGSDataFileGlob = filepath.Join(
+		documentsPath,
+		defaultSavedVariablesPathBase,
+		defaultGSDataFileGlobBase,
+	)
 }

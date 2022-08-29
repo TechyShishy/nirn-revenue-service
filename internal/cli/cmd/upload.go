@@ -1,16 +1,11 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
-	"path/filepath"
-	"strings"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data"
 	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/parser"
 	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
 	"github.com/spf13/cobra"
-	"golang.org/x/sys/windows"
 )
 
 const (
@@ -31,40 +26,16 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		files, err := filepath.Glob(*fileGlob)
+		p := parser.Parser{GSDataFileGlob: *fileGlob}
+
+		regionsData, err := p.ParseGlob()
 		if err != nil {
 			log.Print(err)
 			return
 		}
-		regionsData := make(map[region.Region][]data.ItemVariant)
-		for _, file := range files {
-			globalVar := strings.TrimSuffix(
-				filepath.Base(file),
-				filepath.Ext(file),
-			) + "SavedVariables"
-			log.Printf("Processing %v...", filepath.Base(file))
-			r, err := parser.Parse(file, globalVar)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			regionsData = mergeRegions(regionsData, r)
-		}
 
 		log.Printf("Found %v records", len(regionsData[region.NA]))
 	},
-}
-
-func mergeRegions(
-	r ...map[region.Region][]data.ItemVariant,
-) map[region.Region][]data.ItemVariant {
-	allFiles := make(map[region.Region][]data.ItemVariant)
-	for _, r2 := range r {
-		for k, v := range r2 {
-			allFiles[k] = append(allFiles[k], v...)
-		}
-	}
-	return allFiles
 }
 
 func init() {
@@ -78,11 +49,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	documentsPath, err := windows.KnownFolderPath(windows.FOLDERID_Documents, 0)
-	if err != nil {
-		log.Print(fmt.Errorf("couldn't get Documents path: %w", err))
-		documentsPath = "%USERPROFILE%/Documents"
-	}
 	fileGlob = uploadCmd.Flags().
-		StringP("glob", "g", filepath.Join(documentsPath, SavedVariablesPath, GSXXDataGlobBase), "glob path that matches GSXXData files to upload")
+		StringP("glob", "g", parser.DefaultGSDataFileGlob, "glob path that matches GSXXData files to upload")
 }
