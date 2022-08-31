@@ -5,11 +5,13 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore"
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data"
+	accountregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/account"
+	guildregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
+	itemlinkregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
 	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
+	luaconv "github.com/TechyShishy/nirn-revenue-service/internal/lua/conv"
 	lua "github.com/yuin/gopher-lua"
 	"golang.org/x/sys/windows"
 )
@@ -32,7 +34,7 @@ func New() Parser {
 	}
 }
 
-func (p *Parser) ParseGlob() (map[region.Region][]data.ItemVariant, error) {
+func (p *Parser) ParseGlob() (map[region.Name]*region.Region, error) {
 	gsDataFiles, err := p.globFiles(p.GSDataFileGlob)
 	if err != nil {
 		return nil, err
@@ -41,7 +43,7 @@ func (p *Parser) ParseGlob() (map[region.Region][]data.ItemVariant, error) {
 	return p.ParseAll()
 }
 
-func (p *Parser) ParseAll() (map[region.Region][]data.ItemVariant, error) {
+func (p *Parser) ParseAll() (map[region.Name]*region.Region, error) {
 	L := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer L.Close()
 
@@ -95,268 +97,142 @@ func GlobalVarFromPath(path string) string {
 	) + "SavedVariables"
 }
 
-func parseGlobals(globals []lua.LTable) (map[region.Region][]data.ItemVariant, error) {
-	regionsData := make(map[region.Region][]data.ItemVariant)
+func parseGlobals(globals []lua.LTable) (map[region.Name]*region.Region, error) {
+	regionsData := make(map[region.Name]*region.Region)
+	itemLinks := itemlinkregistry.New()
+	accounts := accountregistry.New()
+	guilds := guildregistry.New()
 	for _, global := range globals {
-		r := make(map[region.Region][]data.ItemVariant)
-		global.ForEach(func(key, value lua.LValue) {
-			keyString, err := luaString(key)
+		err := global.ForEachWithError(func(keyLV, sectionLV lua.LValue) error {
+			sectionKey, err := luaconv.String(keyLV)
 			if err != nil {
-				log.Print(err)
-				return
+				return err
 			}
-			valueTable, err := luaTable(value)
+			sectionLT, err := luaconv.Table(sectionLV)
 			if err != nil {
-				log.Print(err)
-				return
+				return err
 			}
 
-			switch keyString {
+			switch sectionKey {
 			case "dataeu":
-				r[region.EU] = parseRegion(valueTable)
+
+				regionsData[region.EU] = parseRegion(
+					regionsData[region.EU],
+					itemLinks,
+					accounts,
+					guilds,
+					sectionLT,
+				)
 			case "datana":
-				r[region.NA] = parseRegion(valueTable)
+				regionsData[region.NA] = parseRegion(
+					regionsData[region.NA],
+					itemLinks,
+					accounts,
+					guilds,
+					sectionLT,
+				)
+			case "itemLink":
+				itemLinks = parseItemLinks(itemLinks, sectionLT)
+			case "accountNames":
+				accounts = parseAccounts(accounts, sectionLT)
+			case "guildNames":
+				guilds = parseGuilds(guilds, sectionLT)
+			default:
+				return nil // Not one of the data sections we care about right now
 			}
+			return nil
 		})
-		regionsData = mergeRegions(regionsData, r)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return regionsData, nil
 }
 
-func mergeRegions(
-	r ...map[region.Region][]data.ItemVariant,
-) map[region.Region][]data.ItemVariant {
-	allFiles := make(map[region.Region][]data.ItemVariant)
-	for _, r2 := range r {
-		for k, v := range r2 {
-			allFiles[k] = append(allFiles[k], v...)
+func parseRegion(
+	regionData *region.Region,
+	itemlinks *itemlinkregistry.ItemLinkRegistry,
+	accounts *accountregistry.AccountRegistry,
+	guilds *guildregistry.GuildRegistry,
+	regionLT *lua.LTable,
+) *region.Region {
+	if regionData == nil {
+		regionData = &region.Region{
+			ItemLinkRegistry: itemlinks,
+			AccountRegistry:  accounts,
+			GuildRegistry:    guilds,
 		}
 	}
-	return allFiles
+	return regionData.AddVariantsFromLT(regionLT)
 }
 
-func parseRegion(dataTable *lua.LTable) []data.ItemVariant {
-	regionData := []data.ItemVariant{}
-	dataTable.ForEach(func(id, variant lua.LValue) {
-		idInt, err := luaInt(id)
+func parseItemLinks(
+	itemLinks *itemlinkregistry.ItemLinkRegistry,
+	itemLinksLT *lua.LTable,
+) *itemlinkregistry.ItemLinkRegistry {
+	err := itemLinksLT.ForEachWithError(func(linkLV, idLV lua.LValue) error {
+		link, err := luaconv.String(linkLV)
 		if err != nil {
-			log.Print(err)
-			return
+			return err
 		}
-		variantTable, err := luaTable(variant)
+		id, err := luaconv.Uint(idLV)
 		if err != nil {
-			log.Print(err)
-			return
+			return err
 		}
-		variantTable.ForEach(func(vId, listing lua.LValue) {
-			vIdString, err := luaString(vId)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			listingTable, err := luaTable(listing)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-
-			i := data.ItemVariant{Id: idInt, Variant: vIdString}
-			listingTable.ForEach(func(key, value lua.LValue) {
-				keyString, err := luaString(key)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				switch keyString {
-				case "itemAdderText":
-					valueString, err := luaString(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.ItemAdderText = valueString
-				case "totalCount":
-					valueInt, err := luaInt(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.TotalCount = uint(valueInt)
-				case "itemIcon":
-					valueString, err := luaString(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.Icon = valueString
-				case "newestTime":
-					valueInt, err := luaInt(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.NewestTime = time.Unix(int64(valueInt), 0)
-				case "oldestTime":
-					valueInt, err := luaInt(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.OldestTime = time.Unix(int64(valueInt), 0)
-				case "wasAltered":
-					valueBool, err := luaBool(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.Altered = valueBool
-				case "sales":
-					valueTable, err := luaTable(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					sales, err := parseSales(valueTable)
-					if err != nil {
-						log.Print(err)
-					}
-					i.Sales = sales
-				case "itemDesc":
-					valueString, err := luaString(value)
-					if err != nil {
-						log.Print(err)
-						return
-					}
-					i.Description = valueString
-				}
-			})
-			regionData = append(regionData, i)
-		})
+		itemLinks.Add(id, link)
+		return nil
 	})
-	return regionData
+	if err != nil {
+		log.Print(err)
+		return nil
+	}
+	return itemLinks
 }
 
-func parseSales(t *lua.LTable) ([]data.Sale, error) {
-	sales := []data.Sale{}
-	t.ForEach(func(i, sale lua.LValue) {
-		saleTable, err := luaTable(sale)
+func parseAccounts(
+	accounts *accountregistry.AccountRegistry,
+	accountsLT *lua.LTable,
+) *accountregistry.AccountRegistry {
+	err := accountsLT.ForEachWithError(func(nameLV, idLV lua.LValue) error {
+		name, err := luaconv.String(nameLV)
 		if err != nil {
-			log.Print(err)
-			return
+			return err
 		}
-		s := data.Sale{}
-		saleTable.ForEach(func(key, value lua.LValue) {
-			keyString, err := luaString(key)
-			if err != nil {
-				log.Print(err)
-				return
-			}
-			switch keyString {
-			case "wasKiosk":
-				valueBool, err := luaBool(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.Kiosk = valueBool
-			case "buyer":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.BuyerId = valueInt
-			case "price":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.Price = valueInt
-			case "itemLink":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.ItemLinkId = valueInt
-			case "seller":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.SellerId = valueInt
-			case "timestamp":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.Timestamp = time.Unix(int64(valueInt), 0)
-			case "quant":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.Quantity = uint(valueInt)
-			case "guild":
-				valueInt, err := luaInt(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.GuildId = valueInt
-			case "id":
-				valueString, err := luaString(value)
-				if err != nil {
-					log.Print(err)
-					return
-				}
-				s.Id = valueString
-			}
-		})
-		sales = append(sales, s)
+		id, err := luaconv.Uint(idLV)
+		if err != nil {
+			return err
+		}
+		accounts.Add(id, name)
+		return nil
 	})
-	return sales, nil
+	if err != nil {
+		log.Print(err)
+		return nil
+	}
+	return accounts
 }
 
-func luaString(l lua.LValue) (string, error) {
-	lString, ok := l.(lua.LString)
-	if !ok {
-		return "", fmt.Errorf("wanted string, got %v from lua: %#v", l.Type(), l)
+func parseGuilds(
+	guilds *guildregistry.GuildRegistry,
+	guildsLT *lua.LTable,
+) *guildregistry.GuildRegistry {
+	err := guildsLT.ForEachWithError(func(nameLV, idLV lua.LValue) error {
+		name, err := luaconv.String(nameLV)
+		if err != nil {
+			return err
+		}
+		id, err := luaconv.Uint(idLV)
+		if err != nil {
+			return err
+		}
+		guilds.Add(id, name)
+		return nil
+	})
+	if err != nil {
+		log.Print(err)
+		return nil
 	}
-	return string(lString), nil
-}
-
-func luaInt(l lua.LValue) (int, error) {
-	lNumber, ok := l.(lua.LNumber)
-	if !ok {
-		return 0, fmt.Errorf("wanted number, got %v from lua: %#v", l.Type(), l)
-	}
-	lFloat := float64(lNumber)
-	lInt := int(lFloat)
-	if lFloat != float64(lInt) {
-		log.Print(fmt.Errorf("wanted int, got float from lua: %#v", lFloat))
-	}
-	return lInt, nil
-}
-
-func luaBool(l lua.LValue) (bool, error) {
-	lBool, ok := l.(lua.LBool)
-	if !ok {
-		return false, fmt.Errorf("wanted bool, got %v from lua: %#v", l.Type(), l)
-	}
-	return bool(lBool), nil
-}
-
-func luaTable(l lua.LValue) (*lua.LTable, error) {
-	lTable, ok := l.(*lua.LTable)
-	if !ok {
-		return &lua.LTable{}, fmt.Errorf("wanted lua.LTable, got %v from lua: %#v", l.Type(), l)
-	}
-	return lTable, nil
+	return guilds
 }
 
 func init() {

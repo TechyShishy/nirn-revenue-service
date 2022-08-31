@@ -1,13 +1,23 @@
 package data
 
-import "time"
+import (
+	"time"
+
+	accountregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/account"
+	guildregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
+	itemlinkregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
+)
 
 type Sale struct {
-	SellerId   int
-	ItemLinkId int
+	SellerId   uint
+	Seller     *accountregistry.Account
+	ItemLinkId uint
+	ItemLink   *itemlinkregistry.ItemLink
 	Kiosk      bool
-	GuildId    int
-	BuyerId    int
+	GuildId    uint
+	Guild      *guildregistry.Guild
+	BuyerId    uint
+	Buyer      *accountregistry.Account
 	Id         string
 	Quantity   uint
 	Timestamp  time.Time

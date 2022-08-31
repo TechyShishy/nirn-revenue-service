@@ -34,7 +34,15 @@ to quickly create a Cobra application.`,
 			return
 		}
 
-		log.Printf("Found %v records", len(regionsData[region.NA]))
+		log.Printf("Found %v records", len(regionsData[region.NA].ItemVariants))
+		sale := regionsData[region.NA].ItemVariants[12].Sales[0]
+		log.Printf(
+			"ItemVariant 12 Sale 0: Seller (%#v) Buyer (%#v) Guild(%#v) Link (%#v)",
+			sale.Seller.Name,
+			sale.Buyer.Name,
+			sale.Guild.Name,
+			sale.ItemLink.Link,
+		)
 	},
 }
 

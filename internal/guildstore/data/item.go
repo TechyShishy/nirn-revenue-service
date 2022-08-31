@@ -13,4 +13,6 @@ type ItemVariant struct {
 	ItemAdderText string // TODO(TechyShishy): fix type name
 	Icon          string
 	Sales         []Sale
+	Link          string
 }
+
