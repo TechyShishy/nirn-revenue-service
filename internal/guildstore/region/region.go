@@ -5,12 +5,14 @@ import (
 	"log"
 	"time"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data"
-	accountregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/account"
-	guildregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
-	itemlinkregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
-	luaconv "github.com/TechyShishy/nirn-revenue-service/internal/lua/conv"
+	pb "github.com/techyshishy/nirn-revenue-service/api/proto"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/data"
+	accountregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/account"
+	guildregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
+	itemlinkregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
+	luaconv "github.com/techyshishy/nirn-revenue-service/internal/lua/conv"
 	lua "github.com/yuin/gopher-lua"
+	"google.golang.org/protobuf/proto"
 )
 
 type Name string
@@ -22,6 +24,7 @@ const (
 )
 
 type Region struct {
+	Name	         Name
 	ItemVariants     []data.ItemVariant
 	ItemLinkRegistry *itemlinkregistry.ItemLinkRegistry
 	GuildRegistry    *guildregistry.GuildRegistry
@@ -45,10 +48,19 @@ func (r *Region) AddVariants(variants []data.ItemVariant) *Region {
 	return r
 }
 
+func (r *Region) Proto() *pb.Region {
+	p := &pb.Region{}
+	p.Name = *proto.String(string(r.Name))
+	for _, iv := range(r.ItemVariants) {
+		p.ItemVariant = append(p.ItemVariant, iv.Proto())
+	}
+	return p
+}
+
 func (r *Region) parseRegion(regionLT *lua.LTable) []data.ItemVariant {
 	region := []data.ItemVariant{}
 	err := regionLT.ForEachWithError(func(idLV, variantLV lua.LValue) error {
-		id, err := luaconv.Int(idLV)
+		id, err := luaconv.Uint(idLV)
 		if err != nil {
 			return err
 		}
@@ -84,7 +96,11 @@ func (r *Region) parseRegion(regionLT *lua.LTable) []data.ItemVariant {
 	return region
 }
 
-func (r *Region) parseListing(id int, vId string, listingLT *lua.LTable) (data.ItemVariant, error) {
+func (r *Region) parseListing(
+	id uint,
+	vId string,
+	listingLT *lua.LTable,
+) (data.ItemVariant, error) {
 	listing := data.ItemVariant{Id: id, Variant: vId}
 	err := listingLT.ForEachWithError(func(propertyLV, valueLV lua.LValue) error {
 		property, err := luaconv.String(propertyLV)

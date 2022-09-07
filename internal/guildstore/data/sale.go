@@ -3,9 +3,12 @@ package data
 import (
 	"time"
 
-	accountregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/account"
-	guildregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
-	itemlinkregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
+	accountregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/account"
+	guildregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
+	itemlinkregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
+
+	pb "github.com/techyshishy/nirn-revenue-service/api/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type Sale struct {
@@ -22,4 +25,17 @@ type Sale struct {
 	Quantity   uint
 	Timestamp  time.Time
 	Price      int
+}
+func (s *Sale) Proto() *pb.Sale {
+return &pb.Sale{
+	Seller: *proto.String(s.Seller.Name),
+	ItemLink: *proto.String(s.ItemLink.Link),
+	Kiosk: *proto.Bool(s.Kiosk),
+	Guild: *proto.String(s.Guild.Name),
+	Buyer: *proto.String(s.Buyer.Name),
+	Id: *proto.String(s.Id),
+	Quantity: *proto.Uint64(uint64(s.Quantity)),
+	Timestamp: *proto.Int64(s.Timestamp.Unix()),
+	Price: *proto.Uint64(uint64(s.Price)),
+}
 }

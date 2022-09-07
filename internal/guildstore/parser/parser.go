@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore"
-	accountregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/account"
-	guildregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
-	itemlinkregistry "github.com/TechyShishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
-	luaconv "github.com/TechyShishy/nirn-revenue-service/internal/lua/conv"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore"
+	accountregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/account"
+	guildregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
+	itemlinkregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/itemlink"
+	regionregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/region"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/region"
+	luaconv "github.com/techyshishy/nirn-revenue-service/internal/lua/conv"
 	lua "github.com/yuin/gopher-lua"
-	"golang.org/x/sys/windows"
 )
 
 const (
@@ -34,7 +34,7 @@ func New() Parser {
 	}
 }
 
-func (p *Parser) ParseGlob() (map[region.Name]*region.Region, error) {
+func (p *Parser) ParseGlob() (*regionregistry.RegionRegistry, error) {
 	gsDataFiles, err := p.globFiles(p.GSDataFileGlob)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (p *Parser) ParseGlob() (map[region.Name]*region.Region, error) {
 	return p.ParseAll()
 }
 
-func (p *Parser) ParseAll() (map[region.Name]*region.Region, error) {
+func (p *Parser) ParseAll() (*regionregistry.RegionRegistry, error) {
 	L := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer L.Close()
 
@@ -52,12 +52,12 @@ func (p *Parser) ParseAll() (map[region.Name]*region.Region, error) {
 		return nil, err
 	}
 
-	regionsData, err := parseGlobals(globalLValues)
+	regionRegistry, err := parseGlobals(globalLValues)
 	if err != nil {
 		return nil, err
 	}
 
-	return regionsData, nil
+	return regionRegistry, nil
 }
 
 func readFiles(l *lua.LState, files []guildstore.GSDataFile) (r []lua.LTable, err error) {
@@ -97,11 +97,8 @@ func GlobalVarFromPath(path string) string {
 	) + "SavedVariables"
 }
 
-func parseGlobals(globals []lua.LTable) (map[region.Name]*region.Region, error) {
-	regionsData := make(map[region.Name]*region.Region)
-	itemLinks := itemlinkregistry.New()
-	accounts := accountregistry.New()
-	guilds := guildregistry.New()
+func parseGlobals(globals []lua.LTable) (*regionregistry.RegionRegistry, error) {
+	regionRegistry := regionregistry.New()
 	for _, global := range globals {
 		err := global.ForEachWithError(func(keyLV, sectionLV lua.LValue) error {
 			sectionKey, err := luaconv.String(keyLV)
@@ -115,28 +112,17 @@ func parseGlobals(globals []lua.LTable) (map[region.Name]*region.Region, error) 
 
 			switch sectionKey {
 			case "dataeu":
-
-				regionsData[region.EU] = parseRegion(
-					regionsData[region.EU],
-					itemLinks,
-					accounts,
-					guilds,
-					sectionLT,
-				)
+				regionEU := regionRegistry.Region(region.EU)
+				regionEU.AddVariantsFromLT(sectionLT)
 			case "datana":
-				regionsData[region.NA] = parseRegion(
-					regionsData[region.NA],
-					itemLinks,
-					accounts,
-					guilds,
-					sectionLT,
-				)
+				regionNA := regionRegistry.Region(region.NA)
+				regionNA.AddVariantsFromLT(sectionLT)
 			case "itemLink":
-				itemLinks = parseItemLinks(itemLinks, sectionLT)
+				parseItemLinks(regionRegistry.ItemLinkRegistry, sectionLT)
 			case "accountNames":
-				accounts = parseAccounts(accounts, sectionLT)
+				parseAccounts(regionRegistry.AccountRegistry, sectionLT)
 			case "guildNames":
-				guilds = parseGuilds(guilds, sectionLT)
+				parseGuilds(regionRegistry.GuildRegistry, sectionLT)
 			default:
 				return nil // Not one of the data sections we care about right now
 			}
@@ -146,24 +132,7 @@ func parseGlobals(globals []lua.LTable) (map[region.Name]*region.Region, error) 
 			return nil, err
 		}
 	}
-	return regionsData, nil
-}
-
-func parseRegion(
-	regionData *region.Region,
-	itemlinks *itemlinkregistry.ItemLinkRegistry,
-	accounts *accountregistry.AccountRegistry,
-	guilds *guildregistry.GuildRegistry,
-	regionLT *lua.LTable,
-) *region.Region {
-	if regionData == nil {
-		regionData = &region.Region{
-			ItemLinkRegistry: itemlinks,
-			AccountRegistry:  accounts,
-			GuildRegistry:    guilds,
-		}
-	}
-	return regionData.AddVariantsFromLT(regionLT)
+	return regionRegistry, nil
 }
 
 func parseItemLinks(
@@ -233,17 +202,4 @@ func parseGuilds(
 		return nil
 	}
 	return guilds
-}
-
-func init() {
-	documentsPath, err := windows.KnownFolderPath(windows.FOLDERID_Documents, 0)
-	if err != nil {
-		log.Print(err)
-		return
-	}
-	DefaultGSDataFileGlob = filepath.Join(
-		documentsPath,
-		defaultSavedVariablesPathBase,
-		defaultGSDataFileGlobBase,
-	)
 }

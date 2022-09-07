@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore"
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/parser"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/parser"
 )
 
 var parseFilePath *string

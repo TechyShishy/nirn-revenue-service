@@ -1,0 +1,5 @@
+syntax = "proto3";
+package NirnRevenueService;
+
+option go_package = "github.com/techyshishy/nirn-revenue-service/api/proto";
+

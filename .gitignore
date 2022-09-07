@@ -14,13 +14,18 @@
 !go.sum
 !go.mod
 
+!*.proto
+
 !README.md
 !LICENSE
 
-# !Makefile
+!Makefile
 
 # ...even if they are in subdirectories
 !*/
 
 # ...but still ignore the vendor directory
 /vendor/
+
+# and generated pb.go files
+*.pb.go

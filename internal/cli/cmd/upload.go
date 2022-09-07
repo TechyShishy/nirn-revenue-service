@@ -3,9 +3,9 @@ package cmd
 import (
 	"log"
 
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/parser"
-	"github.com/TechyShishy/nirn-revenue-service/internal/guildstore/region"
 	"github.com/spf13/cobra"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/parser"
+	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/region"
 )
 
 const (
@@ -28,21 +28,19 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		p := parser.Parser{GSDataFileGlob: *fileGlob}
 
-		regionsData, err := p.ParseGlob()
+		regionRegistry, err := p.ParseGlob()
 		if err != nil {
 			log.Print(err)
 			return
 		}
 
-		log.Printf("Found %v records", len(regionsData[region.NA].ItemVariants))
-		sale := regionsData[region.NA].ItemVariants[12].Sales[0]
-		log.Printf(
-			"ItemVariant 12 Sale 0: Seller (%#v) Buyer (%#v) Guild(%#v) Link (%#v)",
-			sale.Seller.Name,
-			sale.Buyer.Name,
-			sale.Guild.Name,
-			sale.ItemLink.Link,
-		)
+		
+
+		log.Printf("Found %v records", len(regionRegistry.Region(region.NA).ItemVariants))
+		for i := 0 ; i < 1000 ; i++ {
+			variant := regionRegistry.Region(region.NA).ItemVariants[i]
+			log.Printf("ItemVariant %v TextProto: %v", i, variant.Proto().String())
+		}
 	},
 }
 

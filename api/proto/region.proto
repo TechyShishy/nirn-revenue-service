@@ -1,0 +1,15 @@
+syntax = "proto3";
+package NirnRevenueService;
+
+option go_package = "github.com/techyshishy/nirn-revenue-service/api/proto";
+
+import "api/proto/itemvariant.proto";
+
+message Region {
+    string name = 1;
+    repeated ItemVariant item_variant = 2;
+}
+
+message Regions {
+    repeated Region region = 1;
+}
