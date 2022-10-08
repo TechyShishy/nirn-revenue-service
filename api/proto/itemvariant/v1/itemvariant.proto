@@ -1,0 +1,20 @@
+syntax = "proto3";
+package api.proto.itemvariant.v1;
+
+option go_package = "github.com/techyshishy/nirn-revenue-service/gen/api/proto/itemvariant/v1";
+
+import "api/proto/sale/v1/sale.proto";
+
+message ItemVariant {
+    uint64 id = 1;
+    string variant = 2;
+    string description = 3;
+    int64 oldest_time = 4;
+    int64 newest_time = 5;
+    uint64 total_count = 6;
+    bool altered = 7;
+    string item_adder_text = 8;
+    string icon = 9;
+    repeated api.proto.sale.v1.Sale sale = 10;
+    string link = 11;
+}

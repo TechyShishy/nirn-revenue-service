@@ -1,0 +1,18 @@
+syntax = "proto3";
+package api.proto.sync.service.v1;
+
+option go_package = "github.com/techyshishy/nirn-revenue-service/gen/api/proto/sync/service/v1";
+
+import "google/api/annotations.proto";
+import "api/proto/region/v1/region.proto";
+
+service SyncService {
+  rpc UpdateRegions(UpdateRegionsRequest) returns (UpdateRegionsResponse) {}
+}
+
+message UpdateRegionsRequest {
+  api.proto.region.v1.Regions regions = 1;
+}
+message UpdateRegionsResponse {
+  string error = 1;
+}

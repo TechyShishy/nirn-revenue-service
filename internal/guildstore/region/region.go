@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/techyshishy/nirn-revenue-service/api/proto"
+	pbr "github.com/techyshishy/nirn-revenue-service/gen/api/proto/region/v1"
 	"github.com/techyshishy/nirn-revenue-service/internal/guildstore/data"
 	accountregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/account"
 	guildregistry "github.com/techyshishy/nirn-revenue-service/internal/guildstore/data/registry/guild"
@@ -24,7 +24,7 @@ const (
 )
 
 type Region struct {
-	Name	         Name
+	Name             Name
 	ItemVariants     []data.ItemVariant
 	ItemLinkRegistry *itemlinkregistry.ItemLinkRegistry
 	GuildRegistry    *guildregistry.GuildRegistry
@@ -48,10 +48,10 @@ func (r *Region) AddVariants(variants []data.ItemVariant) *Region {
 	return r
 }
 
-func (r *Region) Proto() *pb.Region {
-	p := &pb.Region{}
+func (r *Region) Proto() *pbr.Region {
+	p := &pbr.Region{}
 	p.Name = *proto.String(string(r.Name))
-	for _, iv := range(r.ItemVariants) {
+	for _, iv := range r.ItemVariants {
 		p.ItemVariant = append(p.ItemVariant, iv.Proto())
 	}
 	return p

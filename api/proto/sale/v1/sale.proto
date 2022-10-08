@@ -1,0 +1,16 @@
+syntax = "proto3";
+package api.proto.sale.v1;
+
+option go_package = "github.com/techyshishy/nirn-revenue-service/gen/api/proto/sale/v1";
+
+message Sale {
+    string seller = 1;
+    string item_link = 2;
+    bool kiosk = 3;
+    string guild = 4;
+    string buyer = 5;
+    string id = 6;
+    uint64 quantity = 7;
+    int64 timestamp = 8;
+    uint64 price = 9;
+}

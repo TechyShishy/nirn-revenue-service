@@ -9,24 +9,24 @@ import (
 
 type RegionRegistry struct {
 	ItemLinkRegistry *itemlinkregistry.ItemLinkRegistry
-	AccountRegistry *accountregistry.AccountRegistry
-	GuildRegistry *guildregistry.GuildRegistry
-	regionMap map[region.Name]*region.Region
+	AccountRegistry  *accountregistry.AccountRegistry
+	GuildRegistry    *guildregistry.GuildRegistry
+	regionMap        map[region.Name]*region.Region
 }
 
 func New() *RegionRegistry {
 	return &RegionRegistry{
 		ItemLinkRegistry: itemlinkregistry.New(),
-		AccountRegistry: accountregistry.New(),
-		GuildRegistry: guildregistry.New(),
-		regionMap: make(map[region.Name]*region.Region),
+		AccountRegistry:  accountregistry.New(),
+		GuildRegistry:    guildregistry.New(),
+		regionMap:        make(map[region.Name]*region.Region),
 	}
 }
 
 func (m *RegionRegistry) Region(name region.Name) *region.Region {
 	if m.regionMap[name] == nil {
 		m.regionMap[name] = &region.Region{
-			Name: name,
+			Name:             name,
 			ItemLinkRegistry: m.ItemLinkRegistry,
 			AccountRegistry:  m.AccountRegistry,
 			GuildRegistry:    m.GuildRegistry,

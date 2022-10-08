@@ -1,0 +1,13 @@
+runtime: go116  # or another supported version
+
+automatic_scaling:
+  max_instances: 2
+  min_instances: 0
+
+
+service: default
+
+inbound_services:
+- warmup
+
+main: github.com/techyshishy/nirn-revenue-service/cmd/sync-server

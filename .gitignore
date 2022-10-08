@@ -21,11 +21,16 @@
 
 !Makefile
 
+!app.yaml
+!.gcloudignore
+
+!buf.yaml
+!buf.gen.yaml
+!buf.lock
+
 # ...even if they are in subdirectories
 !*/
 
-# ...but still ignore the vendor directory
+# ...but still ignore the vendor and gen directories
 /vendor/
-
-# and generated pb.go files
-*.pb.go
+/gen/

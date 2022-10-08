@@ -34,10 +34,8 @@ to quickly create a Cobra application.`,
 			return
 		}
 
-		
-
 		log.Printf("Found %v records", len(regionRegistry.Region(region.NA).ItemVariants))
-		for i := 0 ; i < 1000 ; i++ {
+		for i := 0; i < 1000; i++ {
 			variant := regionRegistry.Region(region.NA).ItemVariants[i]
 			log.Printf("ItemVariant %v TextProto: %v", i, variant.Proto().String())
 		}
